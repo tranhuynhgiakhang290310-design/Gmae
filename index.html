@@ -1,1 +1,307 @@
 
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Huyền Thoại Diệt Quái</title>
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0;background:#101827;color:white;
+  font-family:Arial,sans-serif;text-align:center
+}
+h1{font-size:25px;color:#facc15;margin:15px 5px}
+#stats{
+  display:flex;justify-content:center;gap:12px;
+  flex-wrap:wrap;padding:5px
+}
+.stat{background:#263449;padding:10px;border-radius:10px}
+canvas{
+  display:block;width:min(96%,850px);height:auto;
+  margin:10px auto;border:3px solid #64748b;
+  border-radius:10px;background:#18243a;
+  touch-action:none
+}
+button{
+  border:0;border-radius:9px;padding:12px 16px;
+  margin:4px;background:#2563eb;color:white;
+  font-size:15px;font-weight:bold;cursor:pointer
+}
+button:hover{filter:brightness(1.15)}
+#attack{background:#dc2626}
+#upgrade{background:#a16207}
+#message{color:#fde68a;min-height:24px}
+small{color:#cbd5e1}
+</style>
+</head>
+<body>
+<h1>⚔️ HUYỀN THOẠI DIỆT QUÁI</h1>
+
+<div id="stats">
+ <div class="stat" id="hp">❤️ Máu: 100/100</div>
+ <div class="stat" id="level">🌍 Màn: 1/10</div>
+ <div class="stat" id="gold">🪙 Vàng: 0</div>
+ <div class="stat" id="power">⚔️ Sát thương: 25</div>
+</div>
+
+<canvas id="game" width="850" height="450"></canvas>
+
+<div>
+ <button id="left">⬅ Trái</button>
+ <button id="jump">⬆ Nhảy</button>
+ <button id="right">➡ Phải</button>
+ <button id="attack">⚔️ Tấn công</button>
+ <button id="upgrade">🛒 Nâng cấp (30 vàng)</button>
+</div>
+<p id="message">Tiêu diệt quái để mở màn tiếp theo!</p>
+<small>Máy tính: A/D hoặc ←/→ di chuyển · W/Space nhảy · J đánh</small>
+<p><button id="restart">🔄 Chơi lại từ đầu</button></p>
+
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+const W=canvas.width,H=canvas.height;
+const $=id=>document.getElementById(id);
+
+let player,enemy,stage,gold,damage,maxHP;
+let keys={},attackCD=0,attackAnim=0,invul=0;
+let gameState="playing",message="";
+let lastTime=0;
+
+function reset(){
+  player={
+    x:100,y:300,w:36,h:55,
+    vx:0,vy:0,hp:100,maxHP:100,
+    face:1,onGround:false
+  };
+  stage=1;gold=0;damage=25;maxHP=100;
+  attackCD=0;attackAnim=0;invul=0;
+  gameState="playing";message="Hãy đánh bại quái vật!";
+  keys={};
+  spawnEnemy();updateUI();
+}
+function spawnEnemy(){
+  const boss=stage%5===0;
+  const hp=boss?180+stage*35:45+stage*18;
+  enemy={
+    x:650,y:boss?285:320,
+    w:boss?66:42,h:boss?85:55,
+    hp,maxHP:hp,
+    speed:boss?0.65:0.8+stage*.12,
+    damage:boss?15:5+stage*1.5,
+    boss,hitCD:0
+  };
+  player.x=100;player.y=300;player.vx=0;player.vy=0;
+}
+function updateUI(){
+  $("hp").textContent=`❤️ Máu: ${Math.ceil(player.hp)}/${player.maxHP}`;
+  $("level").textContent=`🌍 Màn: ${stage}/10`;
+  $("gold").textContent=`🪙 Vàng: ${gold}`;
+  $("power").textContent=`⚔️ Sát thương: ${damage}`;
+  $("message").textContent=message;
+}
+function attack(){
+  if(gameState!=="playing"||attackCD>0)return;
+  attackCD=0.35;attackAnim=0.18;
+  const px=player.x+player.w/2;
+  const ex=enemy.x+enemy.w/2;
+  const dx=ex-px;
+  const inRange=Math.abs(dx)<100;
+  const inFront=Math.sign(dx)===player.face;
+  if(inRange&&inFront){
+    enemy.hp-=damage;
+    message=enemy.boss?"Đang tấn công BOSS!":"Đánh trúng quái!";
+    if(enemy.hp<=0){
+      gold+=enemy.boss?60:15+stage*3;
+      if(stage>=10){
+        gameState="won";
+        message="Bạn đã trở thành HUYỀN THOẠI!";
+      }else{
+        stage++;
+        message=`Qua màn ${stage-1}! Quái mới xuất hiện.`;
+        spawnEnemy();
+      }
+    }
+  }else{
+    message="Đến gần quái và quay mặt về phía nó!";
+  }
+  updateUI();
+}
+function upgrade(){
+  if(gameState!=="playing")return;
+  if(gold<30){
+    message="Bạn cần ít nhất 30 vàng để nâng cấp!";
+  }else{
+    gold-=30;damage+=12;
+    player.maxHP+=15;
+    player.hp=Math.min(player.maxHP,player.hp+30);
+    message="Nâng cấp thành công! Sát thương +12.";
+  }
+  updateUI();
+}
+function jump(){
+  if(gameState==="playing"&&player.onGround){
+    player.vy=-11;player.onGround=false;
+  }
+}
+function update(dt){
+  if(gameState!=="playing")return;
+  dt=Math.min(dt,0.035);
+  const speed=230;
+  player.vx=0;
+  if(keys.ArrowLeft||keys.a){player.vx=-speed;player.face=-1}
+  if(keys.ArrowRight||keys.d){player.vx=speed;player.face=1}
+  player.x=Math.max(0,Math.min(W-player.w,player.x+player.vx*dt));
+
+  player.vy+=850*dt;
+  player.y+=player.vy*dt;
+  if(player.y+player.h>=380){
+    player.y=380-player.h;player.vy=0;player.onGround=true;
+  }
+  attackCD=Math.max(0,attackCD-dt);
+  attackAnim=Math.max(0,attackAnim-dt);
+  invul=Math.max(0,invul-dt);
+  enemy.hitCD=Math.max(0,enemy.hitCD-dt);
+
+  const px=player.x+player.w/2;
+  const ex=enemy.x+enemy.w/2;
+  const dx=px-ex;
+  if(Math.abs(dx)>48){
+    enemy.x+=Math.sign(dx)*enemy.speed*60*dt;
+  }
+  enemy.x=Math.max(0,Math.min(W-enemy.w,enemy.x));
+
+  const touching=
+    Math.abs(px-ex)<(player.w+enemy.w)/2 &&
+    player.y+player.h>enemy.y+8 &&
+    player.y<enemy.y+enemy.h;
+  if(touching&&invul<=0){
+    player.hp-=enemy.damage;
+    invul=0.7;
+    if(player.hp<=0){
+      player.hp=0;gameState="lost";
+      message="Bạn đã bị quái đánh bại!";
+    }
+    updateUI();
+  }
+}
+function rect(x,y,w,h,color){
+  ctx.fillStyle=color;ctx.fillRect(x,y,w,h);
+}
+function text(t,x,y,size,color="white"){
+  ctx.fillStyle=color;ctx.font=`bold ${size}px Arial`;
+  ctx.fillText(t,x,y);
+}
+function bar(x,y,w,h,pct,color){
+  rect(x,y,w,h,"#111827");
+  rect(x,y,w*Math.max(0,Math.min(1,pct)),h,color);
+}
+function draw(){
+  // Bầu trời
+  const sky=ctx.createLinearGradient(0,0,0,H);
+  sky.addColorStop(0,"#172554");
+  sky.addColorStop(1,"#334155");
+  rect(0,0,W,H,"#172554");
+  ctx.fillStyle=sky;ctx.fillRect(0,0,W,H);
+
+  // Trăng và núi
+  ctx.fillStyle="#fde68a";
+  ctx.beginPath();ctx.arc(730,65,27,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle="#26354b";
+  ctx.beginPath();ctx.moveTo(0,330);ctx.lineTo(150,180);
+  ctx.lineTo(280,330);ctx.lineTo(430,205);
+  ctx.lineTo(600,330);ctx.lineTo(750,220);
+  ctx.lineTo(850,330);ctx.fill();
+
+  // Mặt đất
+  rect(0,380,W,70,"#166534");
+  rect(0,380,W,7,"#4ade80");
+  for(let x=15;x<W;x+=55)rect(x,400,20,3,"#15803d");
+
+  // Người chơi
+  if(invul===0||Math.floor(invul*15)%2===0){
+    rect(player.x+7,player.y+player.h-12,9,12,"#1e40af");
+    rect(player.x+22,player.y+player.h-12,9,12,"#1e40af");
+    rect(player.x,player.y+15,player.w,30,"#3b82f6");
+    rect(player.x+5,player.y,26,24,"#f1c27d");
+    rect(player.x+3,player.y-3,30,9,"#7c3aed");
+    rect(player.x+(player.face===1?21:7),player.y+9,5,5,"#111827");
+  }
+  text("HERO",player.x-2,player.y-12,13);
+
+  // Kiếm
+  if(attackAnim>0){
+    ctx.strokeStyle="#fef08a";ctx.lineWidth=8;
+    ctx.beginPath();
+    const sx=player.x+player.w/2;
+    ctx.moveTo(sx,player.y+28);
+    ctx.lineTo(sx+player.face*75,player.y+8);
+    ctx.stroke();
+  }
+
+  // Quái vật
+  rect(enemy.x+5,enemy.y+enemy.h-10,12,10,"#7f1d1d");
+  rect(enemy.x+enemy.w-17,enemy.y+enemy.h-10,12,10,"#7f1d1d");
+  rect(enemy.x,enemy.y,enemy.w,enemy.h,enemy.boss?"#9333ea":"#dc2626");
+  rect(enemy.x+7,enemy.y+12,enemy.w-14,12,"#991b1b");
+  rect(enemy.x+9,enemy.y+14,7,7,"#fef08a");
+  rect(enemy.x+enemy.w-16,enemy.y+14,7,7,"#fef08a");
+  bar(enemy.x,enemy.y-22,enemy.w,10,enemy.hp/enemy.maxHP,"#ef4444");
+  text(enemy.boss?"BOSS":"QUÁI",enemy.x-3,enemy.y-29,14,
+       enemy.boss?"#f0abfc":"#fecaca");
+
+  text(`MÀN ${stage}/10`,18,32,21,"#fde68a");
+  text(`SÁT THƯƠNG ${damage}`,18,58,14);
+  if(stage%5===0)text("⚠ BOSS!",W-120,32,20,"#f0abfc");
+
+  if(gameState!=="playing"){
+    rect(0,0,W,H,"rgba(0,0,0,0.76)");
+    ctx.textAlign="center";
+    text(gameState==="won"?"CHIẾN THẮNG!":"THẤT BẠI!",
+         W/2,190,42,gameState==="won"?"#facc15":"#f87171");
+    text(gameState==="won"?"Bạn đã phá đảo 10 màn!":
+         "Nhấn Chơi lại để thử lần nữa",W/2,235,21);
+    ctx.textAlign="left";
+  }
+}
+function loop(time){
+  const dt=lastTime?(time-lastTime)/1000:0;
+  lastTime=time;
+  update(dt);draw();
+  requestAnimationFrame(loop);
+}
+document.addEventListener("keydown",e=>{
+  const k=e.key.length===1?e.key.toLowerCase():e.key;
+  keys[k]=true;
+  if(["ArrowLeft","ArrowRight"," ","ArrowUp"].includes(e.key))
+    e.preventDefault();
+  if((k==="w"||e.key===" "||e.key==="ArrowUp")&&!e.repeat)jump();
+  if(k==="j"&&!e.repeat)attack();
+});
+document.addEventListener("keyup",e=>{
+  const k=e.key.length===1?e.key.toLowerCase():e.key;
+  keys[k]=false;
+});
+function holdButton(id,key){
+  const b=$(id);
+  b.addEventListener("pointerdown",e=>{
+    e.preventDefault();keys[key]=true;
+    if(b.setPointerCapture)b.setPointerCapture(e.pointerId);
+  });
+  for(const ev of ["pointerup","pointercancel","lostpointercapture"])
+    b.addEventListener(ev,()=>keys[key]=false);
+}
+holdButton("left","ArrowLeft");
+holdButton("right","ArrowRight");
+$("jump").addEventListener("pointerdown",e=>{e.preventDefault();jump()});
+$("attack").addEventListener("pointerdown",e=>{e.preventDefault();attack()});
+$("upgrade").addEventListener("click",upgrade);
+$("restart").addEventListener("click",reset);
+
+reset();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
+
